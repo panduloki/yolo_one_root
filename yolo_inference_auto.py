@@ -98,7 +98,7 @@ print("using ", processor_name, " to detect data")
 
 # initializing the model
 model_path = "D:/downloads/yolo_object_detection/yolo_custom_images/coconut_400.pt"
-image_directory_path = os.getcwd() + "/images"
+image_directory_path = os.getcwd() + "train/images"
 
 get_images_from_folder = True
 cam_id = 1
@@ -119,8 +119,19 @@ def diagonal_distance(px1=None, py1=None, px2=None, py2=None):
 
 
 def mouse_crop(event, x, y, flags, param):
-    global x_start, y_start, x_end, y_end, cropping, present_bounding_boxes_list
-    t = 0
+    global x_start, y_start, x_end, y_end, cropping, present_bounding_boxes_list, oriImage
+    (h, w, _) = oriImage.shape
+
+    # limiting mouse x,y in boundaries
+    if x <= 0:
+        x = 0
+    if y <= 0:
+        y = 0
+
+    if x >= w:
+        x = w
+    if y >= h:
+        y = h
 
     if event == cv2.EVENT_LBUTTONDBLCLK:
         for each_cord1 in present_bounding_boxes_list:
@@ -181,13 +192,12 @@ print("<------------  getting detections ---------------------------------------
 final_bounding_boxes_list = []
 final_confidence_list = []
 for cnt, im2 in enumerate(loaded_images_path):
-    print(f"<--------------------------{cnt}/{no_of_images}-------------------------->", "\n")
+    print(f"<--------------------------{cnt}/{no_of_images-1}-------------------------->", "\n")
     image2 = cv2.imread(image_directory_path + "/" + str(im2))
     bounding_boxes_list1, confidence_list1 = detect_image_using_yolo(image2)
     final_bounding_boxes_list.append(bounding_boxes_list1)
     final_confidence_list.append(confidence_list1)
-print(
-    "<------------  detections are collected ----------------------------------------------------------------------->")
+print("<------------  detections are collected ------------------------------------------------------------------->")
 
 edit = True
 index1 = 0
@@ -206,6 +216,7 @@ while edit:
 
     present_bounding_boxes_list = bounding_boxes_list
 
+    # editing image
     while True:
         oriImage = image2.copy()
 
@@ -261,6 +272,7 @@ while edit:
 
 cv2.destroyAllWindows()
 
+
 def convert(size, box):
     dw = 1. / (size[0])
     dh = 1. / (size[1])
@@ -275,9 +287,9 @@ def convert(size, box):
     return [x, y, w, h]
 
 
-def image_detection_to_yolo_txt(image_shape, coordinates_list, image_path, class_id_list, output_path):
+def image_detection_to_yolo_txt(image_shape, coordinates_list, image_path1, output_path):
     # get image name
-    basename = os.path.basename(image_path)
+    basename = os.path.basename(image_path1)
     image_name = os.path.splitext(basename)[0]
 
     print("text files save in ", output_path)
@@ -290,10 +302,10 @@ def image_detection_to_yolo_txt(image_shape, coordinates_list, image_path, class
 
     out_file = open(output_path + str('/') + image_name + '.txt', 'w')
 
-    [height, width] = image_shape
+    (height, width, _) = image_shape
     # print("image width ", width)
     # print("image height ", height)
-    for coordinates, class_id in zip(coordinates_list, class_id_list):
+    for coordinates in coordinates_list:
         [x0, y0, x1, y1] = coordinates
 
         b = (float(x0),
@@ -303,7 +315,20 @@ def image_detection_to_yolo_txt(image_shape, coordinates_list, image_path, class
         bb = convert((width, height), b)
         # print("converted bounding box", bb)
 
-        out_file.write(str(class_id) + " " + " ".join([str(a) for a in bb]) + '\n')
+        out_file.write(str(0) + " " + " ".join([str(a) for a in bb]) + '\n')
+
+
+print("<------------  editing  completed  ------------------------------------------------------------------->")
+class_id_list2 = [0] * no_of_images
+print("class_id_list2", class_id_list2)
+
+for id1 in range(no_of_images):
+    print(f"<--------------------------{id1}/{no_of_images-1}-------------------------->", "\n")
+    image_path3 = loaded_images_path[id1]
+    image3 = cv2.imread(image_directory_path + "/" + str(image_path3))
+    img_shape = image3.shape
+    output_path2 = os.getcwd() + "train/labels"
+    image_detection_to_yolo_txt(img_shape, final_bounding_boxes_list[id1], image_path3, output_path2)
 
 # root_dir_path1 = "D:/downloads/images/yolo_data_set/val"
 # image_path1 = "D:/downloads/images/yolo_data_set/val/bunch431.jpeg"
