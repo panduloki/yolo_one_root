@@ -1,11 +1,29 @@
 import math
 
 import os
+import sys
 import time
 
 from ultralytics import YOLO
 import torch
 import cv2
+
+train_text_file_path = os.getcwd() + "/train/train.txt"
+
+
+def get_images_from_train_text_file(train_text_file_path1):
+    image_paths = []
+    if os.path.isfile(train_text_file_path1):
+        print("train.txt file already exist")
+        with open(train_text_file_path1, "r") as file1:
+            for line in file1:
+                # print(line.rstrip())
+                image_paths.append(line.rstrip())
+        file1.close()
+
+    else:
+        print("classes text file not exist ")
+    return image_paths
 
 
 def load_images_path_from_folder(folder_path=None):
@@ -98,7 +116,7 @@ print("using ", processor_name, " to detect data")
 
 # initializing the model
 model_path = "D:/downloads/yolo_object_detection/yolo_custom_images/coconut_400.pt"
-image_directory_path = os.getcwd() + "train/images"
+image_directory_path = os.getcwd() + "/train/images"
 
 get_images_from_folder = True
 cam_id = 1
@@ -186,151 +204,203 @@ def mouse_crop(event, x, y, flags, param):
 
 print("<------------------------ loading images from folder ---------------------------------------------------->")
 loaded_images_path = load_images_path_from_folder(image_directory_path)
-no_of_images = len(loaded_images_path)
+# print("loaded image_path_list", loaded_images_path)
 
-print("<------------  getting detections ----------------------------------------------------------------------->")
-final_bounding_boxes_list = []
-final_confidence_list = []
-for cnt, im2 in enumerate(loaded_images_path):
-    print(f"<--------------------------{cnt}/{no_of_images-1}-------------------------->", "\n")
-    image2 = cv2.imread(image_directory_path + "/" + str(im2))
-    bounding_boxes_list1, confidence_list1 = detect_image_using_yolo(image2)
-    final_bounding_boxes_list.append(bounding_boxes_list1)
-    final_confidence_list.append(confidence_list1)
-print("<------------  detections are collected ------------------------------------------------------------------->")
+text_detected_image = get_images_from_train_text_file(train_text_file_path)
+print("image_names_list after detecting from train.txt", text_detected_image)
 
-edit = True
-index1 = 0
-while edit:
-    if index1 <= 0:
-        index1 = 0
-    if index1 >= (no_of_images - 1):
-        index1 = (no_of_images - 1)
-
-    image_path = loaded_images_path[index1]
-    image2 = cv2.imread(image_directory_path + "/" + str(image_path))
-    bounding_boxes_list, confidence_list = final_bounding_boxes_list[index1], final_confidence_list[index1]
-
-    cv2.namedWindow("image")
-    cv2.setMouseCallback("image", mouse_crop)
-
-    present_bounding_boxes_list = bounding_boxes_list
-
-    # editing image
-    while True:
-        oriImage = image2.copy()
-
-        # Drawing
-        for each_cord in present_bounding_boxes_list:
-            # get coordinates
-            [x0, y0, x1, y1] = each_cord
-            start_point1 = (int(x0), int(y0))
-            end_point1 = (int(x1), int(y1))
-
-            # display bounding box
-            cv2.rectangle(oriImage,
-                          start_point1,
-                          end_point1,
-                          (0, 255, 0),
-                          2)
-            if cropping:
-                cv2.rectangle(oriImage, (x_start, y_start), (x_end, y_end), (255, 0, 0), 2)
-
-            # display probability
-            # cv2.putText(oriImage,
-            #             str(each_conf),
-            #             (x0 - 10, y0),
-            #             cv2.FONT_HERSHEY_SIMPLEX,
-            #             1,
-            #             (0, 255, 0),
-            #             2,
-            #             cv2.LINE_AA)
-
-        cv2.imshow("image", oriImage)
-
-        # print("bounding_boxes_list", bounding_boxes_list)
-        key = cv2.waitKey(1)
-        if key == ord('a'):
-            # replace a final list with a new list
-            if present_bounding_boxes_list != bounding_boxes_list:
-                final_bounding_boxes_list[index1] = present_bounding_boxes_list
-
-            index1 -= 1
-            break
-
-        if key == ord('d'):
-            # replace a final list with a new list
-            if present_bounding_boxes_list != bounding_boxes_list:
-                final_bounding_boxes_list[index1] = present_bounding_boxes_list
-
-            index1 += 1
-            break
-
-        if key == 27:
-            edit = False
-            break
-
-cv2.destroyAllWindows()
-
-
-def convert(size, box):
-    dw = 1. / (size[0])
-    dh = 1. / (size[1])
-    x = (box[0] + box[1]) / 2.0 - 1
-    y = (box[2] + box[3]) / 2.0 - 1
-    w = box[1] - box[0]
-    h = box[3] - box[2]
-    x = x * dw
-    w = w * dw
-    y = y * dh
-    h = h * dh
-    return [x, y, w, h]
-
-
-def image_detection_to_yolo_txt(image_shape, coordinates_list, image_path1, output_path):
-    # get image name
-    basename = os.path.basename(image_path1)
-    image_name = os.path.splitext(basename)[0]
-
-    print("text files save in ", output_path)
-
-    text_file_path = output_path + "/classes.txt"
-    if os.path.isfile(text_file_path):
-        print("classes text file already exist")
+# deduct already yolo detected images
+yolo_not_detected_images = []
+yolo_detected_image_paths = []
+for each_path in loaded_images_path:
+    if each_path in text_detected_image:
+        yolo_detected_image_paths.append(each_path)
     else:
-        print("classes text file not exist copying from other folder")
+        yolo_not_detected_images.append(each_path)
+print(
+    f"after segregating yolo detected paths: {yolo_detected_image_paths} yolo undetected image paths"
+    f" {yolo_not_detected_images}")
 
-    out_file = open(output_path + str('/') + image_name + '.txt', 'w')
+no_of_images = len(yolo_not_detected_images)
+if no_of_images > 0:
+    print("<------------  getting detections ----------------------------------------------------------------------->")
+    final_bounding_boxes_list = []
+    final_confidence_list = []
+    for cnt, im2 in enumerate(yolo_not_detected_images):
+        print(f"<--------------------------{cnt}/{no_of_images - 1}-------------------------->", "\n")
+        image2 = cv2.imread(image_directory_path + "/" + str(im2))
+        bounding_boxes_list1, confidence_list1 = detect_image_using_yolo(image2)
+        final_bounding_boxes_list.append(bounding_boxes_list1)
+        final_confidence_list.append(confidence_list1)
 
-    (height, width, _) = image_shape
-    # print("image width ", width)
-    # print("image height ", height)
-    for coordinates in coordinates_list:
-        [x0, y0, x1, y1] = coordinates
-
-        b = (float(x0),
-             float(x1),
-             float(y0),
-             float(y1))
-        bb = convert((width, height), b)
-        # print("converted bounding box", bb)
-
-        out_file.write(str(0) + " " + " ".join([str(a) for a in bb]) + '\n')
+    print("<------------  detections are collected ------------------------------------------------------------------->")
+    completed_image_path_list = []
+    edit = True
+    index1 = 0
 
 
-print("<------------  editing  completed  ------------------------------------------------------------------->")
-class_id_list2 = [0] * no_of_images
-print("class_id_list2", class_id_list2)
+    while edit:
+        # print(f"index:{index1} / no_of_images:{no_of_images}")
 
-for id1 in range(no_of_images):
-    print(f"<--------------------------{id1}/{no_of_images-1}-------------------------->", "\n")
-    image_path3 = loaded_images_path[id1]
-    image3 = cv2.imread(image_directory_path + "/" + str(image_path3))
-    img_shape = image3.shape
-    output_path2 = os.getcwd() + "train/labels"
-    image_detection_to_yolo_txt(img_shape, final_bounding_boxes_list[id1], image_path3, output_path2)
+        if index1 <= 0:
+            index1 = 0
+        if index1 >= no_of_images:
+            index1 = (no_of_images - 1)
 
-# root_dir_path1 = "D:/downloads/images/yolo_data_set/val"
+        image_path = yolo_not_detected_images[index1]
+        image2 = cv2.imread(image_directory_path + "/" + str(image_path))
+        bounding_boxes_list, confidence_list = final_bounding_boxes_list[index1], final_confidence_list[index1]
+
+        cv2.namedWindow("image")
+        cv2.setMouseCallback("image", mouse_crop)
+
+        present_bounding_boxes_list = bounding_boxes_list
+
+        # editing image
+        while True:
+            oriImage = image2.copy()
+
+            # Drawing
+            for each_cord in present_bounding_boxes_list:
+                # get coordinates
+                [x0, y0, x1, y1] = each_cord
+                start_point1 = (int(x0), int(y0))
+                end_point1 = (int(x1), int(y1))
+
+                # display bounding box
+                cv2.rectangle(oriImage,
+                              start_point1,
+                              end_point1,
+                              (0, 255, 0),
+                              2)
+                if cropping:
+                    cv2.rectangle(oriImage, (x_start, y_start), (x_end, y_end), (255, 0, 0), 2)
+
+                # display probability
+                # cv2.putText(oriImage,
+                #             str(each_conf),
+                #             (x0 - 10, y0),
+                #             cv2.FONT_HERSHEY_SIMPLEX,
+                #             1,
+                #             (0, 255, 0),
+                #             2,
+                #             cv2.LINE_AA)
+
+            cv2.imshow("image", oriImage)
+
+            # print("bounding_boxes_list", bounding_boxes_list)
+            key = cv2.waitKey(1)
+            if key == ord('a'):
+                # replace a final list with a new list
+                if present_bounding_boxes_list != bounding_boxes_list:
+                    final_bounding_boxes_list[index1] = present_bounding_boxes_list
+
+                # images which are done stored in a finished list
+                if image_path not in completed_image_path_list:
+                    completed_image_path_list.append(image_path)
+
+                index1 -= 1
+                break
+
+            if key == ord('d'):
+                # replace a final list with a new list
+                if present_bounding_boxes_list != bounding_boxes_list:
+                    final_bounding_boxes_list[index1] = present_bounding_boxes_list
+
+                # images which are done stored in a finished list
+                if image_path not in completed_image_path_list:
+                    completed_image_path_list.append(image_path)
+
+                index1 += 1
+                break
+
+            if key == 27:
+                edit = False
+                # if only one image left, add an image path to a completed image path list
+                if no_of_images == 1:
+                    # images which are done stored in a finished list
+                    if image_path not in completed_image_path_list:
+                        completed_image_path_list.append(image_path)
+
+                break
+    cv2.destroyAllWindows()
+
+    # after completed image store image names in train.txt
+    print("completed_image_path_list", completed_image_path_list)
+    try:
+        train_txt_file = open(train_text_file_path, 'w+')
+        completed_image_path_list += yolo_detected_image_paths
+        for each_name in completed_image_path_list:
+            train_txt_file.write(each_name + '\n')
+        train_txt_file.close()
+
+    except Exception as text_exception:
+        print("error: exception in loading train.txt  folder: ", text_exception)
+
+    print("<------------  editing  completed  ------------------------------------------------------------------->")
+
+
+    def convert(size, box):
+        dw = 1. / (size[0])
+        dh = 1. / (size[1])
+        x = (box[0] + box[1]) / 2.0 - 1
+        y = (box[2] + box[3]) / 2.0 - 1
+        w = box[1] - box[0]
+        h = box[3] - box[2]
+        x = x * dw
+        w = w * dw
+        y = y * dh
+        h = h * dh
+        return [x, y, w, h]
+
+
+    def image_detection_to_yolo_txt(image_shape, coordinates_list, image_path1, output_path):
+        # get image name
+        basename = os.path.basename(image_path1)
+        image_name = os.path.splitext(basename)[0]
+
+        print("text files save in ", output_path)
+
+        text_file_path = output_path + "/classes.txt"
+        if os.path.isfile(text_file_path):
+            print("classes text file already exist")
+        else:
+            print("classes text file not exist copying from other folder")
+
+        out_file = open(output_path + str('/') + image_name + '.txt', 'w')
+
+        (height, width, _) = image_shape
+        # print("image width ", width)
+        # print("image height ", height)
+        for coordinates in coordinates_list:
+            [x0, y0, x1, y1] = coordinates
+
+            b = (float(x0),
+                 float(x1),
+                 float(y0),
+                 float(y1))
+            bb = convert((width, height), b)
+            # print("converted bounding box", bb)
+
+            out_file.write(str(0) + " " + " ".join([str(a) for a in bb]) + '\n')
+        out_file.close()
+
+
+    # class_id_list2 = [0] * no_of_images
+    # print("class_id_list2", class_id_list2)
+
+    for id1 in range(no_of_images):
+        print(f"<--------------------------{id1}/{no_of_images - 1}-------------------------->", "\n")
+        image_path3 = loaded_images_path[id1]
+        image3 = cv2.imread(image_directory_path + "/" + str(image_path3))
+        img_shape = image3.shape
+        output_path2 = os.getcwd() + "/train/labels"
+        image_detection_to_yolo_txt(img_shape, final_bounding_boxes_list[id1], image_path3, output_path2)
+
+    print("<------------  images yolo detection saved in labels    ------------------------------------------------->")
+
+sys.exit()
+
 # image_path1 = "D:/downloads/images/yolo_data_set/val/bunch431.jpeg"
 # output_path1 = "D:/downloads/images/yolo_data_set/val"
 # convert_annotation(root_dir_path1, output_path1, image_path1)
